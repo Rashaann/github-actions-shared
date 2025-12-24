@@ -8,7 +8,7 @@ on:
         description: 'Phrase that triggers the review'
         required: false
         type: string
-        default: '@haiku review'
+        default: '@haiku-ai review'
       target_branch:
         description: 'Base branch to compare against'
         required: false
