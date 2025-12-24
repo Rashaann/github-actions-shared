@@ -14,6 +14,24 @@ on:
         required: false
         type: string
         default: 'main'
+      pr_number:
+        description: 'Pull request number'
+        required: true
+        type: number
+      comment_id:
+        description: 'Comment ID that triggered the review'
+        required: true
+        type: number
+      pr_title:
+        description: 'Pull request title'
+        required: false
+        type: string
+        default: ''
+      pr_body:
+        description: 'Pull request body'
+        required: false
+        type: string
+        default: ''
     secrets:
       ANTHROPIC_API_KEY:
         required: true
@@ -35,7 +53,7 @@ jobs:
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
+              comment_id: ${{ inputs.comment_id }},
               content: 'eyes'
             });
       
@@ -88,8 +106,8 @@ jobs:
         if: steps.get-diff.outputs.diff_exists == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PR_TITLE: ${{ github.event.issue.title }}
-          PR_BODY: ${{ github.event.issue.body }}
+          PR_TITLE: ${{ inputs.pr_title }}
+          PR_BODY: ${{ inputs.pr_body }}
         run: |
           # Create .env file for the reviewer
           echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" > .env
@@ -157,7 +175,7 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: ${{ inputs.pr_number }},
               body: `## 🤖 AI Code Review\n\n${reviewContent}\n\n---\n*Triggered by @${context.actor} with \`${{ inputs.trigger_phrase }}\`*`
             });
             
@@ -165,7 +183,7 @@ jobs:
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
+              comment_id: ${{ inputs.comment_id }},
               content: '+1'
             });
       
@@ -177,7 +195,7 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: ${{ inputs.pr_number }},
               body: '⚠️ No code changes found to review.'
             });
       
@@ -189,7 +207,7 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: ${{ inputs.pr_number }},
               body: '❌ Code review failed. Please check the [action logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
             });
             
@@ -197,6 +215,6 @@ jobs:
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
+              comment_id: ${{ inputs.comment_id }},
               content: 'confused'
             });
