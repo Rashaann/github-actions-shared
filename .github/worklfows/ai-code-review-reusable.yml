@@ -1,0 +1,203 @@
+name: AI Code Review (Reusable)
+
+# This workflow can be called from other repositories
+on:
+  workflow_call:
+    inputs:
+      trigger_phrase:
+        description: 'Phrase that triggers the review'
+        required: false
+        type: string
+        default: '@haiku review'
+      target_branch:
+        description: 'Base branch to compare against'
+        required: false
+        type: string
+        default: 'main'
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: React to comment with eyes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes'
+            });
+      
+      - name: Get PR branch
+        uses: xt0rted/pull-request-comment-branch@v3
+        id: comment-branch
+      
+      - name: Checkout calling repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ steps.comment-branch.outputs.head_ref }}
+          fetch-depth: 0
+      
+      - name: Checkout code reviewer tools
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/github-actions-shared
+          path: .github-actions-shared
+          sparse-checkout: |
+            code_reviewer.py
+            logger.py
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install anthropic python-dotenv
+      
+      - name: Get PR diff
+        id: get-diff
+        run: |
+          BASE_REF="${{ steps.comment-branch.outputs.base_ref }}"
+          
+          # Get the diff
+          git diff origin/$BASE_REF...HEAD > pr_diff.txt
+          
+          # Check if diff exists and is not empty
+          if [ -s pr_diff.txt ]; then
+            echo "diff_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "diff_exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Review code with Claude
+        if: steps.get-diff.outputs.diff_exists == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Create .env file for the reviewer
+          echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" > .env
+          
+          # Create a simple Python script to run the review
+          cat << 'EOF' > run_review.py
+          import os
+          import sys
+          from pathlib import Path
+          
+          # Add the shared actions directory to path
+          sys.path.insert(0, str(Path(__file__).parent / '.github-actions-shared'))
+          
+          # Import our existing CLI code
+          from code_reviewer import CodeReviewer
+          
+          def main():
+              reviewer = CodeReviewer()
+              
+              # Read the diff
+              with open('pr_diff.txt', 'r') as f:
+                  diff_content = f.read()
+              
+              # Get PR context from environment
+              pr_title = os.getenv('PR_TITLE', '')
+              pr_body = os.getenv('PR_BODY', '')
+              context = f"PR Title: {pr_title}\nPR Description: {pr_body}"
+              
+              # Review the code
+              review = reviewer.review_code(diff_content, context=context)
+              
+              if review:
+                  # Save review to file
+                  with open('review_output.md', 'w') as f:
+                      f.write(review)
+                  print("Review completed successfully!")
+                  return 0
+              else:
+                  print("Failed to generate review")
+                  return 1
+          
+          if __name__ == "__main__":
+              sys.exit(main())
+          EOF
+          
+          # Run the review
+          python run_review.py
+        env:
+          PR_TITLE: ${{ github.event.issue.title }}
+          PR_BODY: ${{ github.event.issue.body }}
+      
+      - name: Post review as comment
+        if: steps.get-diff.outputs.diff_exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read the review
+            let reviewContent;
+            try {
+              reviewContent = fs.readFileSync('review_output.md', 'utf8');
+            } catch (error) {
+              reviewContent = '❌ Failed to generate review. Check the action logs for details.';
+            }
+            
+            // Post the review as a comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## 🤖 AI Code Review\n\n${reviewContent}\n\n---\n*Triggered by @${context.actor} with \`${{ inputs.trigger_phrase }}\`*`
+            });
+            
+            // React to original comment with checkmark
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: '+1'
+            });
+      
+      - name: Handle no diff case
+        if: steps.get-diff.outputs.diff_exists == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ No code changes found to review.'
+            });
+      
+      - name: Handle errors
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '❌ Code review failed. Please check the [action logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
+            });
+            
+            // React with confused emoji
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'confused'
+            });
