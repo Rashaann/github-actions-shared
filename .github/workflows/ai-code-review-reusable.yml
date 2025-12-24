@@ -88,6 +88,8 @@ jobs:
         if: steps.get-diff.outputs.diff_exists == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.issue.title }}
+          PR_BODY: ${{ github.event.issue.body }}
         run: |
           # Create .env file for the reviewer
           echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" > .env
@@ -135,9 +137,6 @@ jobs:
           
           # Run the review
           python run_review.py
-        env:
-          PR_TITLE: ${{ github.event.issue.title }}
-          PR_BODY: ${{ github.event.issue.body }}
       
       - name: Post review as comment
         if: steps.get-diff.outputs.diff_exists == 'true'
