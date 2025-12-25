@@ -223,3 +223,10 @@ Each project picks which ones to use!
 # For private repos in different organizations: won't work
 # Solution: Make central repo public OR use GitHub Enterprise
 ```
+
+
+## Examples
+
+![AI reactions](https://github.com/Rashaann/github-actions-shared/blob/main/bot_reaction.png?raw=true)
+
+![AI review](https://github.com/Rashaann/github-actions-shared/blob/main/bot_review.png?raw=true)
