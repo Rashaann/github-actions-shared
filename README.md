@@ -227,6 +227,6 @@ Each project picks which ones to use!
 
 ## Examples
 
-![AI reactions](https://github.com/Rashaann/github-actions-shared/blob/main/bot_reaction.png?raw=true)
+![AI reactions](https://github.com/Rashaann/github-actions-shared/blob/main/images/bot_reaction.png?raw=true)
 
-![AI review](https://github.com/Rashaann/github-actions-shared/blob/main/bot_review.png?raw=true)
+![AI review](https://github.com/Rashaann/github-actions-shared/blob/main/images/bot_review.png?raw=true)
